@@ -1,52 +1,100 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
 }
 
 model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
+  id        Int       @id @default(autoincrement())
+  username  String    @unique
   password  String
-  name      String
-  role      String    @default("USER")
+  email     String    @unique
   createdAt DateTime  @default(now())
+  role      UserRole  @default(USER)
+  token     String?   @unique
   updatedAt DateTime  @updatedAt
   bookings  Booking[]
 }
 
 model Train {
-  id          String    @id @default(uuid())
-  trainNumber String    @unique
+  id          Int          @id @default(autoincrement())
+  trainNumber String       @unique
   name        String
   source      String
   destination String
-  departureTime DateTime
-  arrivalTime   DateTime
-  totalSeats  Int
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  schedule    DateTime
+  createdAt   DateTime     @default(now())
+  totalSeats  Int          @default(100)
+  updatedAt   DateTime     @updatedAt
   bookings    Booking[]
+  Seat        Seat[]
+  TrainRoute  TrainRoute[]
 }
 
 model Booking {
-  id        String   @id @default(uuid())
-  userId    String
-  trainId   String
-  seatNumber Int
-  bookingDate DateTime @default(now())
-  status    String   @default("CONFIRMED")
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  train     Train    @relation(fields: [trainId], references: [id])
+  id            Int      @id @default(autoincrement())
+  userId        Int
+  trainId       Int
+  bookingDate   DateTime @default(now())
+  createdAt     DateTime @default(now())
+  destinationId Int
+  journeyDate   DateTime
+  seatId        Int
+  sourceId      Int
+  status        String   @default("CONFIRMED")
+  updatedAt     DateTime @updatedAt
+  Seat          Seat     @relation(fields: [seatId], references: [id])
+  train         Train    @relation(fields: [trainId], references: [id])
+  user          User     @relation(fields: [userId], references: [id])
+
+  @@unique([trainId, seatId, journeyDate])
+}
+
+model Seat {
+  id          Int       @id @default(autoincrement())
+  trainId     Int
+  seatNumber  Int
+  isAvailable Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime
+  Booking     Booking[]
+  Train       Train     @relation(fields: [trainId], references: [id])
+
+  @@unique([trainId, seatNumber])
+}
+
+model Station {
+  id                                             Int          @id @default(autoincrement())
+  name                                           String       @unique
+  location                                       String
+  createdAt                                      DateTime     @default(now())
+  updatedAt                                      DateTime
+  TrainRoute_TrainRoute_destStationIdToStation   TrainRoute[] @relation("TrainRoute_destStationIdToStation")
+  TrainRoute_TrainRoute_sourceStationIdToStation TrainRoute[] @relation("TrainRoute_sourceStationIdToStation")
+}
+
+model TrainRoute {
+  id                                          Int      @id @default(autoincrement())
+  trainId                                     Int
+  sourceStationId                             Int
+  destStationId                               Int
+  departureTime                               DateTime
+  arrivalTime                                 DateTime
+  distance                                    Float
+  createdAt                                   DateTime @default(now())
+  updatedAt                                   DateTime
+  Station_TrainRoute_destStationIdToStation   Station  @relation("TrainRoute_destStationIdToStation", fields: [destStationId], references: [id])
+  Station_TrainRoute_sourceStationIdToStation Station  @relation("TrainRoute_sourceStationIdToStation", fields: [sourceStationId], references: [id])
+  Train                                       Train    @relation(fields: [trainId], references: [id])
+
+  @@unique([trainId, sourceStationId, destStationId])
+}
+
+enum UserRole {
+  ADMIN
+  USER
 }
