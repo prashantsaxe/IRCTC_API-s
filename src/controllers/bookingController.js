@@ -1,4 +1,5 @@
 const { PrismaClient } = require('@prisma/client');
+
 const prisma = new PrismaClient();
 
 // Check seat availability between source and destination
@@ -106,91 +107,84 @@ const getSeatAvailability = async (req, res) => {
 
 // Book a seat
 const bookSeat = async (req, res) => {
+  const { trainId } = req.body;
+  
+  if (!trainId) {
+      return res.status(400).json({ message: 'Please provide trainId' });
+  }
+
+  // Use a transaction to handle race conditions
   try {
-    const { trainId, seatId, sourceId, destinationId, journeyDate } = req.body;
-    const userId = req.user.id;
+      const result = await prisma.$transaction(async (tx) => {
+          // Lock the train record for the duration of the transaction
+          const train = await tx.train.findUnique({
+              where: { id: trainId },
+          });
 
-    // Validation
-    if (!trainId || !seatId || !sourceId || !destinationId || !journeyDate) {
-      return res.status(400).json({ error: true, message: 'Please provide all required fields' });
-    }
+          if (!train) {
+              throw new Error('Train not found');
+          }
 
-    // Start a transaction to handle race conditions
-    const booking = await prisma.$transaction(async (prisma) => {
-      // Lock the seat for update to prevent race conditions
-      const seat = await prisma.seat.findUnique({
-        where: { id: parseInt(seatId) },
-        select: { id: true, trainId: true, isAvailable: true }
+          // Get the count of existing bookings
+          const bookedSeatsCount = await tx.booking.count({
+              where: {
+                  trainId,
+                  status: 'CONFIRMED',
+              },
+          });
+
+          // Check if seats are available
+          if (bookedSeatsCount >= train.totalSeats) {
+              throw new Error('No seats available');
+          }
+
+          // Find the next available seat number
+          const bookings = await tx.booking.findMany({
+              where: {
+                  trainId,
+                  status: 'CONFIRMED',
+              },
+              orderBy: {
+                  seatNumber: 'asc',
+              },
+          });
+
+          let seatNumber = 1;
+          for (const booking of bookings) {
+              if (booking.seatNumber === seatNumber) {
+                  seatNumber++;
+              } else {
+                  break;
+              }
+          }
+
+          // Create the booking
+          const booking = await tx.booking.create({
+              data: {
+                  userId: req.user.id,
+                  trainId,
+                  seatNumber,
+                  status: 'CONFIRMED',
+              },
+              include: {
+                  train: true,
+              },
+          });
+
+          return booking;
       });
 
-      if (!seat) {
-        throw new Error('Seat not found');
-      }
-
-      if (!seat.isAvailable) {
-        throw new Error('Seat is not available');
-      }
-
-      // Check if seat is already booked for this journey date and route
-      const existingBooking = await prisma.booking.findFirst({
-        where: {
-          seatId: parseInt(seatId),
-          journeyDate: new Date(journeyDate),
-          OR: [
-            {
-              sourceId: parseInt(sourceId),
-              destinationId: parseInt(destinationId)
-            },
-            {
-              AND: [
-                {
-                  sourceId: { lt: parseInt(destinationId) }
-                },
-                {
-                  destinationId: { gt: parseInt(sourceId) }
-                }
-              ]
-            }
-          ]
-        }
+      res.status(201).json({
+          message: 'Booking successful',
+          booking: result,
       });
-
-      if (existingBooking) {
-        throw new Error('Seat is already booked for this journey');
-      }
-
-      // Create booking
-      return await prisma.booking.create({
-        data: {
-          userId,
-          trainId: parseInt(trainId),
-          seatId: parseInt(seatId),
-          sourceId: parseInt(sourceId),
-          destinationId: parseInt(destinationId),
-          journeyDate: new Date(journeyDate)
-        },
-        include: {
-          user: {
-            select: {
-              id: true,
-              username: true,
-              email: true
-            }
-          },
-          train: true,
-          seat: true
-        }
-      });
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Seat booked successfully',
-      booking
-    });
   } catch (error) {
-    console.error('Book seat error:', error);
-    res.status(400).json({ error: true, message: error.message || 'Server error while booking seat' });
+      if (error.message === 'No seats available') {
+          return res.status(400).json({ message: 'No seats available for this train' });
+      } else if (error.message === 'Train not found') {
+          return res.status(404).json({ message: 'Train not found' });
+      }
+      res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 

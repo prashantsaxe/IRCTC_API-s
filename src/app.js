@@ -1,25 +1,42 @@
 const express = require('express');
-const bodyParser = require('body-parser');
+const dotenv = require('dotenv');
 const cors = require('cors');
-const authRoutes = require('./routes/authRoutes');
-const bookingRoutes = require('./routes/bookingRoutes');
-const trainRoutes = require('./routes/trainRoutes');
-const stationRoutes = require('./routes/stationRoutes');
+
+// Load environment variables
+dotenv.config();
+
+// Import routes
 const userRoutes = require('./routes/userRoutes');
-const errorHandler = require('./middleware/errorHandler');
+const trainRoutes = require('./routes/trainRoutes');
+const bookingRoutes = require('./routes/bookingRoutes');
 
 const app = express();
 
+// Middleware
 app.use(cors());
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-app.use('/api/auth', authRoutes);
-app.use('/api/bookings', bookingRoutes);
-app.use('/api/trains', trainRoutes);
-app.use('/api/stations', stationRoutes);
+// Routes
 app.use('/api/users', userRoutes);
+app.use('/api/trains', trainRoutes);
+app.use('/api/bookings', bookingRoutes);
 
-app.use(errorHandler);
+// Root route
+app.get('/', (req, res) => {
+    res.json({ message: 'Welcome to Railway Management API' });
+});
 
-module.exports = app;
+// Error handling middleware
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({
+        message: 'Something went wrong',
+        error: process.env.NODE_ENV === 'production' ? {} : err.stack
+    });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
+});

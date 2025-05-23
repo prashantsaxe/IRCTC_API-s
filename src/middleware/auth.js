@@ -24,13 +24,24 @@ const authenticateToken = async (req, res, next) => {
 const authorizeRoles = (...roles) => {
     return (req, res, next) => {
         if (!req.user || !roles.includes(req.user.role)) {
-            return res.sendStatus(403);
+            return res.status(403).json({ message: "Forbidden: Insufficient permissions" });
         }
         next();
     };
 };
 
+const validateApiKey = (req, res, next) => {
+    const apiKey = req.headers['x-api-key'];
+    
+    if (!apiKey || apiKey !== process.env.ADMIN_API_KEY) {
+        return res.status(401).json({ message: "Unauthorized: Invalid API key" });
+    }
+    
+    next();
+};
+
 module.exports = {
     authenticateToken,
     authorizeRoles,
+    validateApiKey
 };

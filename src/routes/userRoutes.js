@@ -3,13 +3,11 @@ const userController = require('../controllers/userController');
 const { validateUser } = require('../middleware/validator');
 const { authenticate, protect } = require('../middleware/auth');
 
-// const { registerUser, loginUser, logoutUser } = require('../controllers/userController');
-
 const router = express.Router();
 
 // Public routes
-router.post('/register', userController.registerUser);
-router.post('/login', userController.loginUser);
+router.post('/register', userController.register);
+router.post('/login', userController.login);
 
 // Protected routes
 router.post('/logout', protect, userController.logoutUser);

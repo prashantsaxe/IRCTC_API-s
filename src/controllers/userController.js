@@ -1,6 +1,6 @@
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const { PrismaClient } = require('@prisma/client');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
 
@@ -14,106 +14,93 @@ const generateToken = (id) => {
 // Register user
 const registerUser = async (req, res) => {
   try {
-    const { username, email, password } = req.body;
+    const { name, email, password } = req.body;
 
     // Validation
-    if (!username || !email || !password) {
-      return res.status(400).json({ error: true, message: 'Please provide all required fields' });
+    if (!name || !email || !password) {
+      return res.status(400).json({ message: 'Please provide all required fields' });
     }
 
     // Check if user exists
-    const userExists = await prisma.user.findFirst({
-      where: {
-        OR: [
-          { username },
-          { email }
-        ]
-      }
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
     });
 
-    if (userExists) {
-      return res.status(400).json({ error: true, message: 'User already exists' });
+    if (existingUser) {
+      return res.status(400).json({ message: 'User already exists with this email' });
     }
 
     // Hash password
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 10);
 
     // Create user
     const user = await prisma.user.create({
       data: {
-        username,
+        name,
         email,
         password: hashedPassword,
+        role: 'USER',
       },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        role: true
-      }
     });
 
-    if (user) {
-      res.status(201).json({
-        success: true,
-        message: 'User registered successfully',
-        user: {
-          id: user.id,
-          username: user.username,
-          email: user.email,
-          role: user.role
-        }
-      });
-    } else {
-      res.status(400).json({ error: true, message: 'Invalid user data' });
-    }
+    const userWithoutPassword = {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    };
+
+    res.status(201).json({ message: 'User registered successfully', user: userWithoutPassword });
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ error: true, message: 'Server error during registration' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 // Login user
 const loginUser = async (req, res) => {
   try {
-    const { username, password } = req.body;
+    const { email, password } = req.body;
 
     // Validation
-    if (!username || !password) {
-      return res.status(400).json({ error: true, message: 'Please provide username and password' });
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Please provide email and password' });
     }
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { username }
+      where: { email },
     });
 
-    // Check user and password
-    if (user && await bcrypt.compare(password, user.password)) {
-      // Generate token
-      const token = generateToken(user.id);
-      
-      // Update user with token
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { token }
-      });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
 
-      res.status(200).json({
-        success: true,
+    // Check password
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Invalid credentials' });
+    }
+
+    // Generate token
+    const token = jwt.sign(
+      { id: user.id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
+    );
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: {
         id: user.id,
-        username: user.username,
+        name: user.name,
         email: user.email,
         role: user.role,
-        token
-      });
-    } else {
-      res.status(401).json({ error: true, message: 'Invalid credentials' });
-    }
+      },
+    });
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ error: true, message: 'Server error during login' });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 

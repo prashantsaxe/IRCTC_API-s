@@ -1,25 +1,24 @@
 {
-  "name": "irctc-api",
+  "name": "railway-management-api",
   "version": "1.0.0",
-  "description": "Railway Management System API",
-  "main": "src/index.js",
+  "description": "Railway Management System API similar to IRCTC",
+  "main": "src/app.js",
   "scripts": {
-    "start": "node src/index.js",
-    "dev": "nodemon src/index.js",
-    "migrate": "prisma migrate dev"
+    "start": "node src/app.js",
+    "dev": "nodemon src/app.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@prisma/client": "^5.0.0",
-    "bcrypt": "^5.1.0",
+    "@prisma/client": "^4.12.0",
+    "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
+    "dotenv": "^16.0.3",
     "express": "^4.18.2",
-    "express-async-handler": "^1.2.0",
-    "jsonwebtoken": "^9.0.1",
-    "uuid": "^9.0.0"
+    "jsonwebtoken": "^9.0.0"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1",
-    "prisma": "^5.0.0"
+    "nodemon": "^2.0.22",
+    "prisma": "^4.12.0"
   }
 }
