@@ -1,0 +1,106 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  USER
+}
+
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String
+  email     String   @unique
+  role      UserRole @default(USER)
+  token     String?  @unique
+  bookings  Booking[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Train {
+  id           Int          @id @default(autoincrement())
+  trainNumber  String       @unique
+  name         String
+  source       String
+  destination  String
+  schedule     DateTime
+  totalSeats   Int          @default(100)
+  bookings     Booking[]
+  trainRoutes  TrainRoute[]
+  seats        Seat[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+}
+
+model Station {
+  id             Int          @id @default(autoincrement())
+  name           String       @unique
+  location       String
+  sourceRoutes   TrainRoute[] @relation("SourceStation")
+  destRoutes     TrainRoute[] @relation("DestinationStation")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model TrainRoute {
+  id               Int      @id @default(autoincrement())
+  trainId          Int
+  sourceStationId  Int
+  destStationId    Int
+  departureTime    DateTime
+  arrivalTime      DateTime
+  distance         Float
+  train            Train    @relation(fields: [trainId], references: [id])
+  sourceStation    Station  @relation("SourceStation", fields: [sourceStationId], references: [id])
+  destStation      Station  @relation("DestinationStation", fields: [destStationId], references: [id])
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([trainId, sourceStationId, destStationId])
+}
+
+model Seat {
+  id         Int       @id @default(autoincrement())
+  trainId    Int
+  seatNumber Int
+  isAvailable Boolean   @default(true)
+  train      Train     @relation(fields: [trainId], references: [id])
+  bookings   Booking[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([trainId, seatNumber])
+}
+
+model Booking {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  trainId      Int
+  seatId       Int
+  sourceId     Int
+  destinationId Int
+  bookingDate  DateTime  @default(now())
+  journeyDate  DateTime
+  status       String    @default("CONFIRMED")
+  user         User      @relation(fields: [userId], references: [id])
+  train        Train     @relation(fields: [trainId], references: [id])
+  seat         Seat      @relation(fields: [seatId], references: [id])
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([trainId, seatId, journeyDate])
+}
